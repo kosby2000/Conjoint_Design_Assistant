@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conjoint Design Assistant Pro - UTS</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.5; color: #333; background: #f4f7f9; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .section { border-left: 5px solid #3498db; padding: 20px; margin-bottom: 25px; background: #fafafa; border-radius: 0 8px 8px 0; border: 1px solid #eee; border-left-width: 5px; }
+        h2 { margin-top: 0; color: #2c3e50; font-size: 1.3rem; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;}
+        .btn { padding: 10px 18px; cursor: pointer; border-radius: 6px; border: none; font-weight: 600; margin-right: 8px; transition: 0.2s; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-warning { background: #f39c12; color: white; }
+        .btn-danger { background: #e74c3c; color: white; }
+        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 6px; margin: 5px 0; font-size: 0.9rem; }
+        .attr-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; background: white; padding: 10px; border: 1px solid #eee; border-radius: 6px; }
+        .prohibition-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; background: #fffdf0; padding: 10px; border: 1px solid #f1c40f; border-radius: 6px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85rem; }
+        th, td { border: 1px solid #dfe6e9; padding: 8px; text-align: left; }
+        th { background: #f8f9fa; }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #3498db; }
+        .warning-box { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 10px; border-radius: 6px; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+<div id="loading-overlay">🚀 Initializing Engine (Loading NumPy & Pandas)...</div>
+
+<div class="container">
+    <div style="text-align: center; margin-bottom: 30px;">
+        <h1>Conjoint Design Assistant</h1>
+        <p style="color: #130E52;"><b><i>UTS Customer Analytics - Advanced Design Suite</i></b></p>
+		<p style="color: #000060;">Developed by <i>Dr. Kyuseop Kwak</i> with aid of CoPilot and Gemini</p>
+    </div>
+
+    <div class="section">
+        <h2>1. Attributes & Levels</h2>
+        <div id="attr-container">
+            <div class="attr-row">
+                <input type="text" class="attr-name" value="Brand" placeholder="Attr Name">
+                <input type="text" class="attr-levels" style="flex-grow: 1;" value="Apple, Samsung, Google" placeholder="Levels (comma separated)">
+            </div>
+            <div class="attr-row">
+                <input type="text" class="attr-name" value="Price" placeholder="Attr Name">
+                <input type="text" class="attr-levels" style="flex-grow: 1;" value="$600, $8000, $1000" placeholder="Levels (comma separated)">
+            </div>
+        </div>
+        <button class="btn btn-primary" onclick="addAttributeRow()">+ Add Attribute</button>
+    </div>
+
+    <div class="section">
+        <h2>2. Prohibited Profiles</h2>
+        <div id="prohibition-container"></div>
+        <button class="btn btn-warning" onclick="addProhibitionRow()">+ Add Prohibition Rule</button>
+    </div>
+
+    <div class="section">
+        <h2>3. Optimization Options</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div>
+                <label><b>Size Selection:</b></label><br>
+                <select id="size_mode" onchange="toggleCustomN()">
+                    <option value="minimal">Minimal (Required for Estimation)</option>
+                    <option value="extra_df">Extra-DF (Minimal + 8 Profiles)</option>
+                    <option value="perfect_OA">Perfect OA (Theoretical Orthogonality)</option>
+                    <option value="custom" selected>Custom Size</option>
+                </select>
+            </div>
+            <div id="custom_n_div">
+                <label><b>Number of Profiles (N):</b></label><br>
+                <input type="number" id="custom_n" value="12">
+            </div>
+            <div>
+                <label><b>Search Intensity:</b></label><br>
+                <small>Starts: </small><input type="number" id="starts" value="200" style="width:50px;">
+                <small>Iter: </small><input type="number" id="iters" value="2000" style="width:60px;">
+            </div>
+        </div>
+        <button id="gen-btn" class="btn btn-success" py-click="run_generation" style="width: 100%; margin-top: 20px; font-size: 1.1rem;">Generate Best Possible Design</button>
+        <div id="status-update" style="margin-top:10px; text-align:center; font-weight:bold; color:#2980b9;"></div>
+    </div>
+
+    <div id="results" class="section" style="display:none;">
+        <h2>4. Performance & Export</h2>
+        <div style="display:flex; gap:10px; margin-bottom:20px;">
+            <button class="btn btn-primary" py-click="download_design">💾 Profiles CSV</button>
+            <button class="btn btn-primary" py-click="download_x">💾 Effects-Coded X</button>
+			<button class="btn btn-primary" py-click="download_correlations">💾 Save Correlation Matrix</button>
+        </div>
+        
+        <div id="warning-container" class="warning-box"></div>
+
+        <div style="display:flex; gap:20px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:300px;">
+                <h3>Design Metrics</h3>
+                <div id="metrics-table"></div>
+            </div>
+            <div style="flex:1; min-width:300px;">
+                <h3>Top Correlation Pairs</h3>
+                <div id="top-corrs"></div>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:20px;">
+            <div style="flex:1; background:white; padding:10px; border:1px solid #ddd; border-radius:8px;" id="plot-corr"></div>
+            <div style="flex:1; background:white; padding:10px; border:1px solid #ddd; border-radius:8px;" id="plot-balance"></div>
+        </div>
+
+        <h3>Generated Design Matrix</h3>
+        <div id="design-table" style="overflow-x:auto;"></div>
+    </div>
+</div>
+
+<script type="py" config='{"packages": ["numpy", "pandas", "matplotlib"]}'>
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import itertools as it
+import asyncio
+from math import gcd
+from functools import reduce
+from pyscript import display
+from js import document, Blob, URL
+
+exported = {"df": None, "X": None, "corr": None}
+rng = np.random.default_rng()
+
+# --- Logic from Notebook ---
+def lcm(a, b): return a * b // gcd(a, b)
+
+def minimal_runs_for_perfect_OA(attrs):
+    levels = [len(v) for v in attrs.values()]
+    pair_products = [levels[i] * levels[j] for i in range(len(levels)) for j in range(i+1, len(levels))]
+    return reduce(lcm, pair_products) if pair_products else (levels[0] if levels else 1)
+
+def effects_code(df):
+    X_parts = []
+    for col in df.columns:
+        levels = sorted(df[col].unique().tolist())
+        k = len(levels)
+        if k > 1:
+            eye = np.eye(k-1); codebook = {levels[i]: eye[i] for i in range(k-1)}
+            codebook[levels[-1]] = -eye.sum(axis=0)
+            cols = [f"{col}[{lv}]" for lv in levels[:-1]]
+        else:
+            codebook = {levels[0]: np.array([0.0])}; cols = [col]
+        coded = np.vstack([codebook[val] for val in df[col]])
+        X_parts.append(pd.DataFrame(coded, index=df.index, columns=cols))
+    return pd.concat(X_parts, axis=1)
+
+# --- Main Engine ---
+async def run_generation(event):
+    status = document.getElementById("status-update")
+    status.innerHTML = "⏳ <b>Optimizing...</b> Searching candidate space."
+    await asyncio.sleep(0.05)
+    
+    try:
+        # 1. Parse Attributes
+        names = document.querySelectorAll(".attr-name")
+        lvls = document.querySelectorAll(".attr-levels")
+        attrs = {n.value.strip(): [x.strip() for x in l.value.split(",") if x.strip()] 
+                 for n, l in zip(names, lvls) if n.value.strip()}
+        
+        # 2. Build Candidates & Filter Prohibitions
+        full_df = pd.DataFrame(list(it.product(*attrs.values())), columns=attrs.keys())
+        pro_rows = document.querySelectorAll(".prohibition-row")
+        rules = []
+        for pr in pro_rows:
+            rule = {s.dataset.attr: s.value for s in pr.querySelectorAll("select") if s.value != "-- Any --"}
+            if rule: rules.append(rule)
+        
+        candidates = full_df[full_df.apply(lambda r: not any(all(r[k] == v for k, v in rule.items()) for rule in rules), axis=1)].reset_index(drop=True)
+        X_cand = effects_code(candidates).values
+        num_params = X_cand.shape[1] + 1
+        
+        # 3. Determine N (Notebook Logic)
+        mode = document.getElementById("size_mode").value
+        min_oa = minimal_runs_for_perfect_OA(attrs)
+        if mode == "minimal": n_profiles = num_params
+        elif mode == "extra_df": n_profiles = num_params + 8
+        elif mode == "perfect_OA": n_profiles = max(min_oa, num_params)
+        else: n_profiles = int(document.getElementById("custom_n").value)
+
+        # 4. Search
+        starts = int(document.getElementById("starts").value)
+        iters = int(document.getElementById("iters").value)
+        best_sel, best_det = None, -1.0
+        
+        for _ in range(starts):
+            sel = rng.choice(len(candidates), size=min(n_profiles, len(candidates)), replace=False)
+            pool = np.setdiff1d(np.arange(len(candidates)), sel)
+            for _i in range(iters):
+                X_sub = np.column_stack([X_cand[sel], np.ones(len(sel))])
+                det = np.linalg.det(X_sub.T @ X_sub)
+                idx_out, idx_in = rng.integers(0, len(sel)), rng.integers(0, len(pool))
+                t_sel = sel.copy(); t_sel[idx_out] = pool[idx_in]
+                X_t = np.column_stack([X_cand[t_sel], np.ones(len(t_sel))])
+                if np.linalg.det(X_t.T @ X_t) > det:
+                    old = sel[idx_out]; sel[idx_out] = pool[idx_in]; pool[idx_in] = old
+            
+            final_det = np.linalg.det(np.column_stack([X_cand[sel], np.ones(len(sel))]).T @ np.column_stack([X_cand[sel], np.ones(len(sel))]))
+            if final_det > best_det: best_det = final_det; best_sel = sel.copy()
+
+        # 5. Process Results
+        res_df = candidates.iloc[best_sel].reset_index(drop=True)
+        X_res = effects_code(res_df)
+        C = np.corrcoef(X_res.values, rowvar=False)
+        exported["df"], exported["X"] , exported["corr"] = res_df, X_res, pd.DataFrame(C, index=X_res.columns, columns=X_res.columns)
+
+        # UI Updates
+        metrics_html = f"<table><tr><td><b>Min Profiles for Estimation (p)</b></td><td>{num_params}</td></tr>"
+        metrics_html += f"<tr><td><b>Min Profiles for Perfect OA</b></td><td>{min_oa}</td></tr>"
+        metrics_html += f"<tr><td><b>Profiles Generated (N)</b></td><td>{len(res_df)}</td></tr>"
+        metrics_html += f"<tr><td><b>D-Efficiency Metrics</b></td><td>{best_det ** (1/num_params):.4f}</td></tr></table>"
+        document.getElementById("metrics-table").innerHTML = metrics_html
+
+        # Top Correlations & Warning (Notebook Logic)
+        c_abs = np.abs(C); np.fill_diagonal(c_abs, 0); tri = np.triu(c_abs)
+        indices = np.argsort(tri.flatten())[::-1][:10]
+        corrs_html = "<table><tr><th>Pair</th><th>|r|</th></tr>"
+        warns = []
+        for idx in indices:
+            r, c = divmod(idx, C.shape[1])
+            val = tri[r, c]
+            if val > 0:
+                corrs_html += f"<tr><td>{X_res.columns[r]} / {X_res.columns[c]}</td><td>{val:.3f}</td></tr>"
+                if val >= 0.3: warns.append(f"{X_res.columns[r]} vs {X_res.columns[c]} (r={val:.3f})")
+        
+        document.getElementById("top-corrs").innerHTML = corrs_html + "</table>"
+        warn_box = document.getElementById("warning-container")
+        if warns:
+            warn_box.style.display = "block"
+            warn_box.innerHTML = "⚠️ <b>Warning:</b> Large correlations found (|r| &ge; 0.30):<br>" + "<br>".join(warns[:5])
+        else: warn_box.style.display = "none"
+
+        # Plots
+        plt.close('all')
+        f1, ax1 = plt.subplots(figsize=(4, 3)); ax1.imshow(C, cmap='coolwarm', vmin=-1, vmax=1); ax1.set_title("Correlation Map")
+        document.getElementById("plot-corr").innerHTML = ""; display(f1, target="plot-corr")
+        
+        f2, axes = plt.subplots(len(attrs), 1, figsize=(4, 2*len(attrs)))
+        if len(attrs) == 1: axes = [axes]
+        for i, (k, v) in enumerate(attrs.items()):
+            cnts = res_df[k].value_counts().reindex(v, fill_value=0)
+            axes[i].bar(cnts.index.astype(str), cnts.values, color='#3498db'); axes[i].set_title(f"Balance: {k}")
+        plt.tight_layout(); document.getElementById("plot-balance").innerHTML = ""; display(f2, target="plot-balance")
+
+        document.getElementById("design-table").innerHTML = res_df.to_html(classes="table", index=False)
+        document.getElementById("results").style.display = "block"
+        status.innerHTML = "✅ Design Generated Successfully!"
+    except Exception as e: status.innerHTML = f"❌ Error: {str(e)}"
+
+def download_design(e):
+    csv = exported["df"].to_csv(index=False); blob = Blob.new([csv], {"type":"text/csv"})
+    link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "conjoint_profiles.csv"; link.click()
+
+def download_x(e):
+    csv = exported["X"].to_csv(index=False); blob = Blob.new([csv], {"type":"text/csv"})
+    link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "effects_coded_X.csv"; link.click()
+
+def download_correlations(e):
+    csv = exported["corr"].to_csv(index=False); blob = Blob.new([csv], {"type":"text/csv"})
+    link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "correlations.csv"; link.click()
+
+# Startup: Unlock the UI
+document.getElementById("loading-overlay").style.display = "none"
+</script>
+
+<script>
+    function addAttributeRow() {
+        const div = document.createElement('div'); div.className = 'attr-row';
+        div.innerHTML = '<input type="text" class="attr-name" placeholder="Attr Name"> <input type="text" class="attr-levels" style="flex-grow: 1;" placeholder="Levels (comma separated)"> <button class="btn btn-danger" onclick="this.parentElement.remove()">×</button>';
+        document.getElementById('attr-container').appendChild(div);
+    }
+    function addProhibitionRow() {
+        const rows = document.querySelectorAll(".attr-row"), container = document.getElementById("prohibition-container"), div = document.createElement("div");
+        div.className = "prohibition-row";
+        rows.forEach(r => {
+            const name = r.querySelector(".attr-name").value.trim(), lvls = r.querySelector(".attr-levels").value.split(",").map(l => l.trim()).filter(l => l);
+            if (name && lvls.length) {
+                const item = document.createElement("div");
+                item.innerHTML = `<label><small>${name}</small></label><br><select data-attr="${name}"><option>-- Any --</option>${lvls.map(l => `<option>${l}</option>`).join("")}</select>`;
+                div.appendChild(item);
+            }
+        });
+        if (div.children.length) {
+            const del = document.createElement("button"); del.className="btn btn-danger"; del.innerHTML="×"; del.onclick=()=>div.remove();
+            div.appendChild(del); container.appendChild(div);
+        } else alert("Please define attributes first.");
+    }
+    function toggleCustomN() {
+        document.getElementById("custom_n_div").style.visibility = document.getElementById("size_mode").value === "custom" ? "visible" : "hidden";
+    }
+</script>
+</body>
+</html>
