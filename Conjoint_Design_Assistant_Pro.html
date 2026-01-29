@@ -39,6 +39,13 @@
 
     <div class="section">
         <h2>1. Attributes & Levels</h2>
+		
+		<div class="import-box">
+            <label><b>Quick Load from CSV:</b></label><br>
+            <input type="file" id="csv-upload" accept=".csv" style="margin-top:5px;">
+            <p style="font-size: 0.75rem; color: #666; margin: 5px 0 0 0;">Format: Two columns named "Attribute" and "Levels" (comma-separated).</p>
+        </div>
+		
         <div id="attr-container">
             <div class="attr-row">
                 <input type="text" class="attr-name" value="Brand" placeholder="Attr Name">
@@ -121,13 +128,43 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import itertools as it
 import asyncio
+import io
 from math import gcd
 from functools import reduce
-from pyscript import display
-from js import document, Blob, URL
+from pyscript import display, when
+from js import document, Blob, URL, FileReader
 
 exported = {"df": None, "X": None, "corr": None}
 rng = np.random.default_rng()
+
+# --- CSV Import Logic ---
+@when("change", "#csv-upload")
+async def handle_upload(event):
+    file_list = event.target.files
+    if len(file_list) == 0: return
+    
+    file = file_list.item(0)
+    text = await file.text()
+    
+    try:
+        df = pd.read_csv(io.StringIO(text))
+        if 'Attribute' not in df.columns or 'Levels' not in df.columns:
+            document.getElementById("status-update").innerHTML = "❌ Error: CSV must have 'Attribute' and 'Levels' columns."
+            return
+            
+        container = document.getElementById("attr-container")
+        container.innerHTML = "" # Clear existing
+        
+        for idx, row in df.iterrows():
+            div = document.createElement('div')
+            div.className = 'attr-row'
+            div.innerHTML = f'<input type="text" class="attr-name" value="{row["Attribute"]}"> <input type="text" class="attr-levels" style="flex-grow: 1;" value="{row["Levels"]}"> <button class="btn btn-danger" onclick="this.parentElement.remove()">×</button>'
+            container.appendChild(div)
+            
+        document.getElementById("status-update").innerHTML = "✅ CSV Loaded Successfully."
+    except Exception as e:
+        document.getElementById("status-update").innerHTML = f"❌ CSV Error: {str(e)}"
+
 
 # --- Logic from Notebook ---
 def lcm(a, b): return a * b // gcd(a, b)
