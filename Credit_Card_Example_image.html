@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Conjoint Lab - Visual Edition</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #eef2f7; padding: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; background: white; padding: 30px; border-radius: 15px; }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 30px; }
+        .credit-card {
+            width: 320px; height: 195px;
+            background-image: url('credit_card_bg.png');
+            background-size: cover; background-position: center;
+            border-radius: 15px; position: relative;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+        .white-bg { 
+            background: rgba(255,255,255,0.92); 
+            padding: 2px 8px; border-radius: 5px; 
+            border: 1px solid #ddd; color: #1a202c; 
+        }
+        .card-label { position: absolute; font-size: 0.7rem; text-transform: uppercase; font-weight: bold; }
+        .card-value { position: absolute; font-size: 1.15rem; font-weight: 800; }
+        .pos-limit { top: 75px; left: 20px; }
+        .val-limit { top: 92px; left: 20px; }
+        .pos-rate { top: 75px; right: 20px; }
+        .val-rate { top: 92px; right: 20px; color: #c53030 !important; }
+        .pos-fee { bottom: 15px; left: 20px; font-size: 0.85rem; }
+        .rank-badge {
+            position: absolute; top: -12px; left: -12px;
+            background: #2b6cb0; color: white; border-radius: 50%; 
+            width: 42px; height: 42px; display: flex; align-items: center; 
+            justify-content: center; border: 3px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .rank-input-v { width: 35px; background: transparent; border: none; color: white; text-align: center; font-size: 1.2rem; font-weight: bold; outline: none; }
+        .btn { width: 100%; margin-top: 30px; padding: 20px; background: #38a169; color: white; border: none; border-radius: 12px; font-size: 1.25rem; font-weight: bold; cursor: pointer; }
+        #loading-msg { text-align: center; padding: 50px; font-weight: bold; color: #2f855a; font-size: 1.3rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1 style="text-align: center;">Credit Card Market Simulator</h1>
+	<p style="text-align:center; color: #0066FF;"><i>24753 Customer Analytics</i> at UTS</p>
+	<p style="text-align:center; color: #0066FF;">Designed by <i>Dr. Kyuseop Kwak</i> with the aid of Gemini</p>
+	<p style="text-align:center; color: #4a5568;">Rank cards from <b>1 (Favorite)</b> to <b>9 (Least Favorite)</b>.</p>
+	
+    <div id="loading-msg">⚙️ Profile generating ....</div>
+	
+    <div id="card-container" class="card-grid"></div>
+    <button class="btn" py-click="analyze">Generate Preference Analytics</button>
+    <div id="results" style="display:none; margin-top:40px;">
+        <h2 style="text-align:center">Your Personal Part-Worth Utilities</h2>
+        <div id="plot-area" style="background: white; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;"></div>
+    </div>
+</div>
+
+<script type="py" config='{"packages": ["numpy", "pandas", "matplotlib"]}'>
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from pyscript import display
+from js import document
+
+attrs = {
+    "Interest Rate": ["12%", "15%", "19%"],
+    "Credit Limit": ["$2,000", "$5,000", "$10,000"],
+    "Annual Fee": ["$0", "$50", "$100"]
+}
+design = [
+    ["12%", "$2,000", "$0"], ["12%", "$5,000", "$50"], ["12%", "$10,000", "$100"],
+    ["15%", "$2,000", "$50"], ["15%", "$5,000", "$100"], ["15%", "$10,000", "$0"],
+    ["19%", "$2,000", "$100"], ["19%", "$5,000", "$0"], ["19%", "$10,000", "$50"]
+]
+df_p = pd.DataFrame(design, columns=list(attrs.keys()))
+
+def setup():
+    cont = document.getElementById("card-container")
+    for i, r in df_p.iterrows():
+        div = document.createElement("div")
+        div.className = "credit-card"
+        div.innerHTML = f"""
+            <div class="rank-badge"><input type="number" class="rank-input-v" id="r-{i}" placeholder="?" min="1" max="9"></div>
+            <div class="card-label white-bg pos-limit">Limit</div>
+            <div class="card-value white-bg val-limit">{r['Credit Limit']}</div>
+            <div class="card-label white-bg pos-rate">APR</div>
+            <div class="card-value white-bg val-rate">{r['Interest Rate']}</div>
+            <div class="card-label white-bg pos-fee">Annual Fee: {r['Annual Fee']}</div>
+        """
+        cont.appendChild(div)
+    document.getElementById("loading-msg").style.display = "none"
+
+async def analyze(e):
+    try:
+        ranks = [int(document.getElementById(f"r-{i}").value) for i in range(9)]
+        y = 10 - np.array(ranks)
+        X_list = []
+        for col in df_p.columns:
+            lvls = attrs[col]
+            cb = {lvls[0]: [1,0], lvls[1]: [0,1], lvls[2]: [-1,-1]}
+            X_list.append(np.array([cb[val] for val in df_p[col]]))
+        X = np.column_stack([np.ones(9)] + X_list)
+        betas = np.linalg.inv(X.T @ X) @ X.T @ y
+        
+        plt.close('all')
+        fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+        idx = 1
+        importances = []
+        flat_axes = axes.flatten()
+		
+        for i, (attr_name, lvl_names) in enumerate(attrs.items()):
+            b = betas[idx:idx+2]
+            # ORIGINAL SIZE: Zero-centered part-worths
+            utils = np.append(b, -sum(b))
+            importances.append(np.ptp(utils))
+            ax = flat_axes[i]
+            ax.plot(lvl_names, utils, marker='s', color='#38a169', linewidth=2)
+            ax.axhline(0, color='black', lw=1, alpha=0.3)
+            ax.set_title(attr_name, fontweight='bold')
+            idx += 2
+			
+        imp_pct = [(v/sum(importances))*100 for v in importances]
+        flat_axes[3].barh(list(attrs.keys()), imp_pct, color='#3182ce')
+        flat_axes[3].set_title("Importance (%)", fontweight='bold')
+		flat_axes[3].set_xlim(0, 100)
+		
+        plt.tight_layout()
+        document.getElementById("plot-area").innerHTML = ""
+        display(fig, target="plot-area")
+		document.getElementById("results").style.display = "block"
+		status.innerHTML = "✅ Analysis Complete!"
+    except: pass
+
+setup()
+</script>
+</body>
+</html>
